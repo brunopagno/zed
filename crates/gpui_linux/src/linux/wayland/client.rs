@@ -1964,42 +1964,53 @@ impl Dispatch<wl_keyboard::WlKeyboard, ()> for WaylandClientStatePtr {
                         let mut keystroke =
                             keystroke_from_xkb(keymap_state, state.modifiers, keycode);
                         if let Some(mut compose) = state.compose_state.take() {
-                            compose.feed(keysym);
-                            match compose.status() {
-                                xkb::Status::Composing => {
-                                    keystroke.key_char = None;
-                                    state.pre_edit_text =
-                                        compose.utf8().or(keystroke_underlying_dead_key(keysym));
-                                    let pre_edit =
-                                        state.pre_edit_text.clone().unwrap_or(String::default());
-                                    drop(state);
-                                    focused_window.handle_ime(ImeInput::SetMarkedText(pre_edit));
-                                    state = client.borrow_mut();
-                                }
-
-                                xkb::Status::Composed => {
-                                    state.pre_edit_text.take();
-                                    keystroke.key_char = compose.utf8();
-                                    if let Some(keysym) = compose.keysym() {
-                                        keystroke.key = xkb::keysym_get_name(keysym);
-                                    }
-                                }
-                                xkb::Status::Cancelled => {
-                                    let pre_edit = state.pre_edit_text.take();
-                                    let new_pre_edit = keystroke_underlying_dead_key(keysym);
-                                    state.pre_edit_text = new_pre_edit.clone();
-                                    drop(state);
-                                    if let Some(pre_edit) = pre_edit {
-                                        focused_window.handle_ime(ImeInput::InsertText(pre_edit));
-                                    }
-                                    if let Some(current_key) = new_pre_edit {
+                            let chord = state.modifiers.control
+                                || state.modifiers.alt
+                                || state.modifiers.platform
+                                || state.modifiers.function;
+                            if !chord {
+                                compose.feed(keysym);
+                                match compose.status() {
+                                    xkb::Status::Composing => {
+                                        keystroke.key_char = None;
+                                        state.pre_edit_text = compose
+                                            .utf8()
+                                            .or(keystroke_underlying_dead_key(keysym));
+                                        let pre_edit = state
+                                            .pre_edit_text
+                                            .clone()
+                                            .unwrap_or(String::default());
+                                        drop(state);
                                         focused_window
-                                            .handle_ime(ImeInput::SetMarkedText(current_key));
+                                            .handle_ime(ImeInput::SetMarkedText(pre_edit));
+                                        state = client.borrow_mut();
                                     }
-                                    compose.feed(keysym);
-                                    state = client.borrow_mut();
+
+                                    xkb::Status::Composed => {
+                                        state.pre_edit_text.take();
+                                        keystroke.key_char = compose.utf8();
+                                        if let Some(keysym) = compose.keysym() {
+                                            keystroke.key = xkb::keysym_get_name(keysym);
+                                        }
+                                    }
+                                    xkb::Status::Cancelled => {
+                                        let pre_edit = state.pre_edit_text.take();
+                                        let new_pre_edit = keystroke_underlying_dead_key(keysym);
+                                        state.pre_edit_text = new_pre_edit.clone();
+                                        drop(state);
+                                        if let Some(pre_edit) = pre_edit {
+                                            focused_window
+                                                .handle_ime(ImeInput::InsertText(pre_edit));
+                                        }
+                                        if let Some(current_key) = new_pre_edit {
+                                            focused_window
+                                                .handle_ime(ImeInput::SetMarkedText(current_key));
+                                        }
+                                        compose.feed(keysym);
+                                        state = client.borrow_mut();
+                                    }
+                                    _ => {}
                                 }
-                                _ => {}
                             }
                             state.compose_state = Some(compose);
                         }
