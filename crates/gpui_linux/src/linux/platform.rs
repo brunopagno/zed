@@ -1124,6 +1124,7 @@ pub(super) fn keystroke_from_xkb(
         Keysym::backslash => "\\".to_owned(),
         Keysym::bar => "|".to_owned(),
 
+        Keysym::dead_grave => "`".to_owned(),
         Keysym::grave => "`".to_owned(),
         Keysym::asciitilde => "~".to_owned(),
         Keysym::exclam => "!".to_owned(),
